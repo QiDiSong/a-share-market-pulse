@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080b11">
+  <meta name="description" content="沪深 A 股实时量能看板：涨跌家数、板块热力图、上证分时、两市成交额与量能增减。">
+  <title>A股量能看板 · 沪深实时</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="page-atmosphere" aria-hidden="true"></div>
+
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="量能脉搏首页">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 36 36" fill="none">
+            <path d="M5 23.5h4.7l2.6-8.2 4.7 15 4.1-21 3.7 14.2h3.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="29.6" cy="23.5" r="2.1" fill="currentColor"/>
+          </svg>
+        </span>
+        <span class="brand-copy">
+          <span class="brand-name">量能脉搏</span>
+          <span class="brand-sub">MARKET PULSE</span>
+        </span>
+      </a>
+
+      <div class="topbar-center">
+        <div class="session-pill" id="sessionPill" data-state="loading">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="sessionText">正在连接</span>
+        </div>
+        <div class="topbar-date">
+          <span id="headerDate">—</span>
+          <span id="headerSub">获取行情中</span>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <div class="refresh-state" aria-live="polite">
+          <span class="refresh-state-label" id="refreshLabel">自动刷新</span>
+          <span class="refresh-countdown" id="countdown">—</span>
+        </div>
+        <button class="btn btn-refresh" id="refreshBtn" type="button" aria-label="立即刷新行情" title="立即刷新（快捷键 R）">
+          <svg class="refresh-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M16.4 7.2A7 7 0 1 0 17 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M16.8 3.4v4.2h-4.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>刷新</span>
+        </button>
+        <button class="btn btn-pause" id="pauseBtn" type="button" aria-label="暂停自动刷新" aria-pressed="false" title="暂停或继续自动刷新">
+          <svg class="pause-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M7.2 5v10M12.8 5v10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+          </svg>
+          <svg class="play-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="m7.4 5 7.2 5-7.2 5V5Z" fill="currentColor"/>
+          </svg>
+          <span id="pauseLabel">暂停</span>
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="pageTitle">
+        <div class="hero-copy">
+          <div class="eyebrow">
+            <span class="eyebrow-tag">CN</span>
+            <span>沪深A股 · 实时切片</span>
+            <span class="live-badge" id="liveBadge"><i aria-hidden="true"></i><span id="liveLabel">LIVE</span></span>
+          </div>
+          <h1 id="pageTitle">A股量能<span>看板</span></h1>
+          <p>涨跌、分时与量能，一张图看清今天的市场。</p>
+        </div>
+
+        <div class="hero-side">
+          <div class="asof">
+            <span class="asof-label">行情截至 / AS OF</span>
+            <strong id="asOfTime">—</strong>
+            <span id="asOfDate">—</span>
+          </div>
+          <div class="index-tape" aria-label="主要指数">
+            <div class="tape-item">
+              <span class="tape-name">上证</span>
+              <b id="tapeShValue">—</b>
+              <em id="tapeShPct">—</em>
+            </div>
+            <div class="tape-item">
+              <span class="tape-name">深证</span>
+              <b id="tapeSzValue">—</b>
+              <em id="tapeSzPct">—</em>
+            </div>
+            <div class="tape-item">
+              <span class="tape-name">创业板</span>
+              <b id="tapeCybValue">—</b>
+              <em id="tapeCybPct">—</em>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="notice" id="notice" hidden role="status" aria-live="polite">
+        <span class="notice-icon" aria-hidden="true">
+          <svg viewBox="0 0 20 20" fill="none"><path d="M10 6.2v4.7M10 14h.01" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M8.6 2.9 2.2 14a1.7 1.7 0 0 0 1.5 2.5h12.6a1.7 1.7 0 0 0 1.5-2.5L11.4 2.9a1.6 1.6 0 0 0-2.8 0Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        </span>
+        <span class="notice-copy" id="noticeText">行情提醒</span>
+        <button class="notice-retry" id="noticeRetry" type="button">立即重试</button>
+      </div>
+
+      <section class="overview-grid" aria-label="市场概览">
+        <article class="card breadth-card">
+          <header class="card-head">
+            <div class="card-heading">
+              <span class="card-no">01</span>
+              <div>
+                <h2>涨跌概览</h2>
+                <p>沪深A股 · 涨跌家数对比</p>
+              </div>
+            </div>
+            <span class="chip chip-neutral" id="breadthMood">等待行情</span>
+          </header>
+
+          <div class="breadth-numbers">
+            <div class="breadth-side is-up">
+              <span class="side-label"><span class="direction up">↑</span>上涨</span>
+              <strong class="js-number" id="upCount">—</strong>
+              <span class="side-share" id="upShare">—</span>
+            </div>
+            <div class="breadth-ratio">
+              <span>涨跌比</span>
+              <b id="upDownRatio">—</b>
+            </div>
+            <div class="breadth-side is-down">
+              <span class="side-label">下跌<span class="direction down">↓</span></span>
+              <strong class="js-number" id="downCount">—</strong>
+              <span class="side-share" id="downShare">—</span>
+            </div>
+          </div>
+
+          <div class="breadth-meter" aria-hidden="true">
+            <span class="meter-up" id="upSegment"></span>
+            <span class="meter-flat" id="flatSegment"></span>
+            <span class="meter-down" id="downSegment"></span>
+          </div>
+          <div class="breadth-mix">
+            <span><i class="mix-dot up"></i>涨 <b id="upMix">—</b></span>
+            <span><i class="mix-dot flat"></i>平 <b id="flatMix">—</b></span>
+            <span><i class="mix-dot down"></i>跌 <b id="downMix">—</b></span>
+            <em id="breadthTotal">共 — 只</em>
+          </div>
+
+          <div class="breadth-foot">
+            <div class="market-breadth">
+              <span class="market-badge sh">沪</span>
+              <span>沪市</span>
+              <b id="shBreadth">—</b>
+            </div>
+            <div class="market-breadth">
+              <span class="market-badge sz">深</span>
+              <span>深市</span>
+              <b id="szBreadth">—</b>
+            </div>
+            <div class="flat-total">
+              <span>平盘</span>
+              <b id="flatCount">—</b>
+            </div>
+          </div>
+        </article>
+
+        <article class="card turnover-card">
+          <header class="card-head">
+            <div class="card-heading">
+              <span class="card-no">02</span>
+              <div>
+                <h2>两市成交额</h2>
+                <p>沪市 + 深市 · 当日累计</p>
+              </div>
+            </div>
+            <span class="live-chip"><i aria-hidden="true"></i><span id="turnoverLiveLabel">LIVE</span></span>
+          </header>
+
+          <div class="turnover-value">
+            <strong id="turnoverBig">—</strong>
+            <span id="turnoverUnit">万亿</span>
+          </div>
+          <div class="turnover-yi" id="turnoverYi">— 亿元</div>
+
+          <div class="turnover-compare">
+            <div>
+              <span class="compare-label">较上一交易日同时段</span>
+              <strong id="turnoverDelta">—</strong>
+            </div>
+            <span class="compare-pct" id="turnoverDeltaPct">—</span>
+          </div>
+
+          <div class="mini-split">
+            <div class="mini-split-head">
+              <span>沪深分布</span>
+              <span><i class="legend-dot sh"></i>沪 <b id="shTurnover">—</b><i class="legend-dot sz"></i>深 <b id="szTurnover">—</b></span>
+            </div>
+            <div class="mini-split-track" aria-hidden="true">
+              <span class="mini-sh" id="shSplitBar"></span>
+              <span class="mini-sz" id="szSplitBar"></span>
+            </div>
+          </div>
+
+          <div class="day-progress">
+            <div class="day-progress-head">
+              <span>已达上一交易日全天</span>
+              <b id="dayProgressPct">—</b>
+            </div>
+            <div class="day-progress-track" aria-hidden="true"><span id="dayProgressBar"></span></div>
+            <div class="day-progress-note" id="prevFullNote">上一交易日全天 —</div>
+          </div>
+        </article>
+
+        <article class="card limit-card">
+          <header class="card-head">
+            <div class="card-heading">
+              <span class="card-no">03</span>
+              <div>
+                <h2>封板股池</h2>
+                <p id="poolDateLabel">东方财富口径 · —</p>
+              </div>
+            </div>
+          </header>
+
+          <div class="limit-panel">
+            <div class="limit-stat is-up">
+              <span class="limit-label"><i class="limit-mark">↑</i>涨停</span>
+              <strong id="limitUp">—</strong>
+              <span class="limit-unit">家</span>
+            </div>
+            <div class="limit-divider"><span>VS</span></div>
+            <div class="limit-stat is-down">
+              <span class="limit-label"><i class="limit-mark">↓</i>跌停</span>
+              <strong id="limitDown">—</strong>
+              <span class="limit-unit">家</span>
+            </div>
+          </div>
+
+          <div class="limit-border" aria-hidden="true"><span class="red"></span><span class="green"></span></div>
+
+          <div class="limit-foot">
+            <div><span>涨跌停比</span><b id="limitRatio">—</b></div>
+            <p>封板股池数量<br>非全市场涨跌停总数</p>
+          </div>
+        </article>
+      </section>
+
+
+
+      <section class="chart-grid" aria-label="分时与量能">
+        <article class="card chart-card index-card">
+          <header class="card-head chart-card-head">
+            <div class="card-heading">
+              <span class="card-no">04</span>
+              <div>
+                <h2>大盘分时</h2>
+                <p>上证指数 · 09:30—15:00</p>
+              </div>
+            </div>
+            <div class="quote-block">
+              <strong id="indexValue">—</strong>
+              <span id="indexChange">—</span>
+            </div>
+          </header>
+
+          <div class="chart-legend-row">
+            <div class="legend-group">
+              <span class="legend-item"><i class="legend-line index"></i>上证指数</span>
+              <span class="legend-item"><i class="legend-dash"></i>昨收 <b id="preClose">—</b></span>
+            </div>
+            <span class="chart-hint">在图上拖动查看时点</span>
+          </div>
+
+          <div class="chart-shell chart-shell-lg" id="indexChart">
+            <svg role="img" aria-label="上证指数当日分时走势图"></svg>
+            <div class="chart-tip" id="indexTip"></div>
+            <div class="chart-empty"><span class="chart-loader" aria-hidden="true"></span>正在接入分时行情</div>
+          </div>
+        </article>
+
+        <article class="card chart-card delta-card">
+          <header class="card-head chart-card-head">
+            <div class="card-heading">
+              <span class="card-no">05</span>
+              <div>
+                <h2>量能增减</h2>
+                <p>今日累计成交额 − 昨日同时段</p>
+              </div>
+            </div>
+            <span class="chip chip-delta" id="deltaChip">等待行情</span>
+          </header>
+
+          <div class="delta-hero">
+            <span class="delta-label">当前量能变化</span>
+            <strong id="deltaBig">—<small>亿元</small></strong>
+            <span class="delta-pct" id="deltaPct">—</span>
+          </div>
+
+          <div class="chart-legend-row">
+            <div class="legend-group">
+              <span class="legend-item"><i class="legend-area positive"></i>放量</span>
+              <span class="legend-item"><i class="legend-area negative"></i>缩量</span>
+            </div>
+            <span class="chart-hint">单位：亿元 · 零线上方为放量</span>
+          </div>
+
+          <div class="chart-shell chart-shell-lg" id="deltaChart">
+            <svg role="img" aria-label="当日累计成交额较昨日同时段增减走势图"></svg>
+            <div class="chart-tip" id="deltaTip"></div>
+            <div class="chart-empty"><span class="chart-loader" aria-hidden="true"></span>正在计算量能变化</div>
+          </div>
+        </article>
+      </section>
+
+      <section class="detail-grid" aria-label="成交额与市场结构">
+        <article class="card chart-card turnover-chart-card">
+          <header class="card-head chart-card-head">
+            <div class="card-heading">
+              <span class="card-no">06</span>
+              <div>
+                <h2>成交额走势</h2>
+                <p>本交易日 vs 上一交易日 · 累计成交额</p>
+              </div>
+            </div>
+            <div class="legend-group legend-group-right">
+              <span class="legend-item"><i class="legend-line amount"></i>本交易日 <em id="legendToday">—</em></span>
+              <span class="legend-item"><i class="legend-line previous"></i>上一交易日 <em id="legendPrev">—</em></span>
+            </div>
+          </header>
+
+          <div class="chart-shell chart-shell-xl" id="turnoverChart">
+            <svg role="img" aria-label="本交易日与上一交易日累计成交额走势对比图"></svg>
+            <div class="chart-tip" id="turnoverTip"></div>
+            <div class="chart-empty"><span class="chart-loader" aria-hidden="true"></span>正在载入成交额曲线</div>
+          </div>
+
+          <div class="chart-summary">
+            <div><span>本交易日累计</span><b id="todayTotalFoot">—</b></div>
+            <div><span>上一交易日同时段</span><b id="prevSameFoot">—</b></div>
+            <div><span>量能增减</span><b id="deltaFoot">—</b></div>
+          </div>
+        </article>
+
+        <article class="card structure-card">
+          <header class="card-head">
+            <div class="card-heading">
+              <span class="card-no">07</span>
+              <div>
+                <h2>沪深结构</h2>
+                <p>成交额分布 · 实时</p>
+              </div>
+            </div>
+          </header>
+
+          <div class="structure-total">
+            <span>两市合计</span>
+            <div><strong id="structTotal">—</strong><small>亿元</small></div>
+          </div>
+
+          <div class="structure-stack" aria-hidden="true">
+            <span class="struct-sh" id="structShBar"></span>
+            <span class="struct-sz" id="structSzBar"></span>
+          </div>
+
+          <div class="structure-rows">
+            <div class="structure-row">
+              <span class="structure-name"><i class="legend-dot sh"></i>沪市</span>
+              <b id="structSh">—</b>
+              <em id="structShPct">—</em>
+            </div>
+            <div class="structure-row">
+              <span class="structure-name"><i class="legend-dot sz"></i>深市</span>
+              <b id="structSz">—</b>
+              <em id="structSzPct">—</em>
+            </div>
+          </div>
+
+          <div class="structure-compare">
+            <div class="structure-compare-head">
+              <span>较上一交易日同时段</span>
+              <b id="structDelta">—</b>
+            </div>
+            <div class="structure-compare-row">
+              <span><i class="legend-dot sh"></i>沪市</span>
+              <b id="structShDelta">—</b>
+              <em id="structShDeltaPct">—</em>
+            </div>
+            <div class="structure-compare-row">
+              <span><i class="legend-dot sz"></i>深市</span>
+              <b id="structSzDelta">—</b>
+              <em id="structSzDeltaPct">—</em>
+            </div>
+          </div>
+
+          <div class="previous-day">
+            <div class="previous-head">
+              <span>上一交易日全天</span>
+              <em id="prevFullDate">—</em>
+            </div>
+            <div class="previous-total"><strong id="prevFull">—</strong><small>亿元</small></div>
+            <div class="previous-split">
+              <span>沪 <b id="prevFullSh">—</b></span>
+              <span>深 <b id="prevFullSz">—</b></span>
+            </div>
+          </div>
+        </article>
+      </section>
+      <section class="sector-section" aria-label="行业板块热力图">
+        <article class="card sector-card">
+          <header class="card-head sector-card-head">
+            <div class="card-heading">
+              <span class="card-no">08</span>
+              <div>
+                <h2>板块热力图</h2>
+                <p>申万一级行业 · 红涨绿跌 · 面积按总市值</p>
+              </div>
+            </div>
+            <span class="chip chip-neutral" id="sectorMood">等待行情</span>
+          </header>
+
+          <div class="sector-layout">
+            <div class="sector-main">
+              <div class="sector-map-head">
+                <div class="sector-scale" aria-label="颜色由绿到红表示由跌到涨">
+                  <span>跌</span>
+                  <i aria-hidden="true"></i>
+                  <span>平</span>
+                  <i aria-hidden="true"></i>
+                  <span>涨</span>
+                </div>
+                <span class="sector-size-note">面积 = 总市值</span>
+              </div>
+
+              <div class="sector-map-shell">
+                <div class="sector-map" id="sectorMap" role="group" aria-label="A股行业板块热力图"></div>
+                <div class="sector-empty" id="sectorEmpty">
+                  <span class="chart-loader" aria-hidden="true"></span>正在载入板块行情
+                </div>
+              </div>
+
+              <div class="sector-detail" id="sectorDetail" aria-live="polite">
+                <span class="sector-detail-name" id="sectorDetailName">悬停 / 点击方块查看</span>
+                <b class="sector-detail-pct" id="sectorDetailPct">—</b>
+                <span class="sector-detail-meta" id="sectorDetailMeta"></span>
+                <span class="sector-detail-leader" id="sectorDetailLeader"></span>
+              </div>
+            </div>
+
+            <aside class="sector-rail" aria-label="板块摘要">
+              <div class="sector-summary">
+                <span class="sector-summary-label">总市值加权涨跌</span>
+                <div class="sector-summary-main">
+                  <strong id="sectorWeightedPct">—</strong>
+                  <span id="sectorMoodNote">等待板块行情</span>
+                </div>
+                <div class="sector-stats">
+                  <div>
+                    <span>上涨板块</span>
+                    <b class="is-positive" id="sectorUpCount">—</b>
+                  </div>
+                  <div>
+                    <span>下跌板块</span>
+                    <b class="is-negative" id="sectorDownCount">—</b>
+                  </div>
+                  <div>
+                    <span>平盘板块</span>
+                    <b id="sectorFlatCount">—</b>
+                  </div>
+                </div>
+              </div>
+
+              <div class="sector-movers">
+                <div class="sector-movers-col">
+                  <div class="sector-movers-head"><span>领涨行业</span><i>TOP 3</i></div>
+                  <ol class="sector-movers-list" id="sectorGainers"></ol>
+                </div>
+                <div class="sector-movers-col">
+                  <div class="sector-movers-head"><span>领跌行业</span><i>TOP 3</i></div>
+                  <ol class="sector-movers-list" id="sectorLosers"></ol>
+                </div>
+              </div>
+
+              <div class="sector-all">
+                <div class="sector-all-head"><span>全行业涨跌</span><i id="sectorAllCount">— SECTORS</i></div>
+                <ol class="sector-all-list" id="sectorAllList"></ol>
+              </div>
+
+              <div class="sector-footnote">
+                <span>东方财富 · 申万行业</span>
+                <span>数据截至 <b id="sectorAsOf">—</b></span>
+              </div>
+            </aside>
+          </div>
+        </article>
+      </section>
+
+    </main>
+
+    <footer class="footer">
+      <div class="footer-brand">
+        <span class="footer-mark" aria-hidden="true"></span>
+        <span>量能脉搏</span>
+        <i></i>
+        <span>A股实时看板</span>
+      </div>
+      <p>数据来源：东方财富（指数、涨跌家数、分时成交额、封板股池、行业板块） · 每 5 秒自动刷新 · 行情仅供观察，不构成投资建议</p>
+    </footer>
+  </div>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>
