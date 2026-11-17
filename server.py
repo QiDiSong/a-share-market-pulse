@@ -179,7 +179,7 @@ def fnum(value: Any, default: float = 0.0) -> float:
 def quote_url() -> str:
     fields = "f1,f2,f3,f4,f6,f12,f13,f14,f104,f105,f106"
     return (
-        "https://push2.eastmoney.com/api/qt/ulist/get"
+        "https://push2.eastmoney.com/api/qt/ulist.np/get"
         f"?fltt=2&invt=2&fields={fields}&secids={QUOTE_SECIDS}&ut={UT}"
     )
 
@@ -189,7 +189,7 @@ def snapshot_url() -> str:
     fields = "f1,f2,f3,f4,f6,f12,f13,f14,f20,f104,f105,f106,f128,f136"
     secids = f"{QUOTE_SECIDS},{SECTOR_SECIDS}"
     return (
-        "https://push2.eastmoney.com/api/qt/ulist/get"
+        "https://push2.eastmoney.com/api/qt/ulist.np/get"
         f"?fltt=2&invt=2&fields={fields}&secids={secids}&ut={UT}"
     )
 
@@ -197,7 +197,7 @@ def snapshot_url() -> str:
 def sector_url() -> str:
     fields = "f12,f14,f2,f3,f4,f6,f20,f104,f105,f128,f136"
     return (
-        "https://push2.eastmoney.com/api/qt/ulist/get"
+        "https://push2.eastmoney.com/api/qt/ulist.np/get"
         f"?fltt=2&invt=2&fields={fields}&secids={SECTOR_SECIDS}&ut={UT}"
     )
 
@@ -286,7 +286,9 @@ def tencent_sectors() -> dict[str, Any]:
         market_cap = fnum(row.get("zsz")) * 1e8
         if not math.isfinite(change_pct) or market_cap <= 0:
             continue
-        up_part, _, down_part = str(row.get("zgb", "0/0")).partition("/")
+        up_part, _, total_part = str(row.get("zgb", "0/0")).partition("/")
+        up_count = int(fnum(up_part))
+        total_count = int(fnum(total_part))
         leader = row.get("lzg") or {}
         items.append(
             {
@@ -296,8 +298,9 @@ def tencent_sectors() -> dict[str, Any]:
                 "changePct": round(change_pct, 2),
                 "marketCap": market_cap,
                 "turnover": max(0.0, fnum(row.get("turnover")) * 1e4),
-                "up": int(fnum(up_part)),
-                "down": int(fnum(down_part)),
+                # 腾讯的 zgb 是「上涨家数/成分股总数」，下跌家数需自行相减。
+                "up": up_count,
+                "down": max(0, total_count - up_count),
                 "leader": leader.get("name"),
                 "leaderChangePct": round(fnum(leader.get("zdf")), 2) if leader else None,
             }
@@ -505,7 +508,7 @@ def market_session(latest_day: str, now: datetime) -> dict[str, Any]:
     }
 
 
-SECTOR_CACHE_SECONDS = 120.0
+SECTOR_CACHE_SECONDS = 30.0
 TRENDS_CACHE_SECONDS = 8.0
 _sector_cache: dict[str, Any] = {"at": 0.0, "data": None}
 _sector_lock = threading.Lock()
@@ -590,9 +593,13 @@ def load_sectors() -> dict[str, Any]:
         payload = fetch_json(sector_url(), 6.0, 1)
         data = parse_sectors(payload)
     except Exception:
-        if cached is not None:
-            return cached
-        data = tencent_sectors()
+        # 东财不可用时优先取备用源的新数据，取不到才退回旧缓存。
+        try:
+            data = tencent_sectors()
+        except Exception:
+            if cached is not None:
+                return cached
+            raise
     with _sector_lock:
         _sector_cache["data"] = data
         _sector_cache["at"] = time.time()
