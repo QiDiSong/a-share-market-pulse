@@ -9,3 +9,7 @@ Thumbs.db
 
 # Local
 *.local
+
+# 公网访问口令与隧道运行产物（含敏感信息，不入库）
+access_key.txt
+公网地址.txt

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hmac
 import json
 import math
 import mimetypes
@@ -39,6 +40,21 @@ UA = (
 )
 UT = "bd1d9ddb04089700cf9c27f6f7426281"
 POOL_UT = "7eea3edcaed734bea9cbfc24409ed989"
+
+# 公网（Cloudflare 隧道）访问口令；本机直连不受影响。
+ACCESS_KEY_FILE = BASE_DIR / "access_key.txt"
+
+
+def load_access_key() -> str:
+    try:
+        if ACCESS_KEY_FILE.exists():
+            return ACCESS_KEY_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        pass
+    return ""
+
+
+ACCESS_KEY = load_access_key()
 
 CACHE_SECONDS = 4.2
 POOL_TTL_SECONDS = 25.0
@@ -1210,6 +1226,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        self._grant_cookie = False
+        if not self.check_access(parsed):
+            self.send_access_denied()
+            return
+        if ACCESS_KEY and self._is_tunneled():
+            from urllib.parse import parse_qs
+
+            if (parse_qs(parsed.query).get("k") or [""])[0] == ACCESS_KEY:
+                self._grant_cookie = True
         if parsed.path == "/api/dashboard":
             self.handle_api()
             return
@@ -1220,6 +1245,58 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         self.serve_static(parsed.path)
+
+    # ---- 公网访问口令：仅对经 Cloudflare 隧道的请求生效 ----
+
+    def _is_tunneled(self) -> bool:
+        return bool(
+            self.headers.get("CF-Connecting-IP")
+            or self.headers.get("CF-Ray")
+            or self.headers.get("X-Forwarded-For")
+        )
+
+    def _cookie_key(self) -> str:
+        raw = self.headers.get("Cookie") or ""
+        for part in raw.split(";"):
+            name, _, value = part.strip().partition("=")
+            if name == "pulse_key":
+                return value.strip()
+        return ""
+
+    def check_access(self, parsed: Any) -> bool:
+        if not ACCESS_KEY or not self._is_tunneled():
+            return True
+        from urllib.parse import parse_qs
+
+        query = parse_qs(parsed.query)
+        supplied = (query.get("k") or [""])[0] or self._cookie_key()
+        return hmac.compare_digest(supplied, ACCESS_KEY)
+
+    def send_access_denied(self) -> None:
+        body = (
+            "<!doctype html><meta charset='utf-8'>"
+            "<title>需要访问口令</title>"
+            "<div style=\"font-family:system-ui;background:#0b1018;color:#e8e9ec;"
+            "height:100vh;display:flex;align-items:center;justify-content:center;"
+            "flex-direction:column;gap:10px\">"
+            "<h2 style='margin:0'>需要访问口令</h2>"
+            "<p style='color:#8b94a4;font-size:13px;margin:0'>"
+            "请在链接后面加上 <code>?k=口令</code> 再打开</p></div>"
+        ).encode("utf-8")
+        self.send_response(401)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def end_headers(self) -> None:
+        if getattr(self, "_grant_cookie", False):
+            self.send_header(
+                "Set-Cookie",
+                f"pulse_key={ACCESS_KEY}; Path=/; Max-Age=2592000; HttpOnly; SameSite=Lax",
+            )
+            self._grant_cookie = False
+        super().end_headers()
 
     def handle_api(self) -> None:
         try:
