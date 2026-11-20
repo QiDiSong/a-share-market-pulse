@@ -1270,6 +1270,16 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
+def already_running(port: int) -> bool:
+    """端口上已有看板在跑时返回 True，避免重复启动开出第二个实例。"""
+    try:
+        with urlopen(f"http://127.0.0.1:{port}/api/health", timeout=1.5) as response:
+            data = json.loads(response.read().decode("utf-8", "ignore"))
+            return bool(isinstance(data, dict) and data.get("ok"))
+    except Exception:
+        return False
+
+
 def find_port(host: str, start: int, attempts: int = 20) -> int:
     for port in range(start, start + attempts):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -1317,6 +1327,11 @@ def main() -> None:
     args = parser.parse_args()
 
     host = "0.0.0.0" if args.lan else args.host
+    if already_running(args.port):
+        # 开机自启、计划任务、手动双击可能同时触发，这里直接退出，
+        # 避免在 8766 上再起一个重复实例。
+        print(f"看板已在 http://127.0.0.1:{args.port} 运行，无需重复启动。")
+        return
     port = find_port(host, args.port)
     server = ThreadingHTTPServer((host, port), Handler)
     server.daemon_threads = True
