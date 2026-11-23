@@ -249,13 +249,39 @@
         </article>
       </section>
 
+      <section class="dist-section" aria-label="涨跌分布">
+        <article class="card dist-card">
+          <header class="card-head dist-head">
+            <div class="card-heading">
+              <span class="card-no">04</span>
+              <div>
+                <h2>涨跌分布</h2>
+                <p>全市场个股按当日涨跌幅区间统计 · 柱高为家数</p>
+              </div>
+            </div>
+            <div class="dist-summary">
+              <span>中位区间<b id="distMedian">—</b></span>
+              <span>平均涨幅<b id="distMean">—</b></span>
+              <span class="dist-summary-up">上涨<b id="distUp">—</b></span>
+              <span class="dist-summary-down">下跌<b id="distDown">—</b></span>
+            </div>
+          </header>
 
+          <div class="dist-chart-wrap">
+            <div class="dist-chart" id="distChart" role="img" aria-label="全市场当日涨跌幅分布柱状图"></div>
+            <div class="dist-empty" id="distEmpty">
+              <span class="chart-loader" aria-hidden="true"></span>正在载入涨跌分布
+            </div>
+          </div>
+          <div class="dist-hint">← 左右滑动查看全部区间 →</div>
+        </article>
+      </section>
 
       <section class="chart-grid" aria-label="分时与量能">
         <article class="card chart-card index-card">
           <header class="card-head chart-card-head">
             <div class="card-heading">
-              <span class="card-no">04</span>
+              <span class="card-no">05</span>
               <div>
                 <h2>大盘分时</h2>
                 <p>上证指数 · 09:30—15:00</p>
@@ -285,7 +311,7 @@
         <article class="card chart-card delta-card">
           <header class="card-head chart-card-head">
             <div class="card-heading">
-              <span class="card-no">05</span>
+              <span class="card-no">06</span>
               <div>
                 <h2>量能增减</h2>
                 <p>今日累计成交额 − 昨日同时段</p>
@@ -320,7 +346,7 @@
         <article class="card chart-card turnover-chart-card">
           <header class="card-head chart-card-head">
             <div class="card-heading">
-              <span class="card-no">06</span>
+              <span class="card-no">07</span>
               <div>
                 <h2>成交额走势</h2>
                 <p>本交易日 vs 上一交易日 · 累计成交额</p>
@@ -348,7 +374,7 @@
         <article class="card structure-card">
           <header class="card-head">
             <div class="card-heading">
-              <span class="card-no">07</span>
+              <span class="card-no">08</span>
               <div>
                 <h2>沪深结构</h2>
                 <p>成交额分布 · 实时</p>
@@ -413,7 +439,7 @@
         <article class="card sector-card">
           <header class="card-head sector-card-head">
             <div class="card-heading">
-              <span class="card-no">08</span>
+              <span class="card-no">09</span>
               <div>
                 <h2>板块热力图</h2>
                 <p>申万一级行业 · 红涨绿跌 · 面积按总市值</p>

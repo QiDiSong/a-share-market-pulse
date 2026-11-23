@@ -715,6 +715,99 @@
     setText('sectorAllCount', '— SECTORS');
   }
 
+  /* ---------- 涨跌分布 ---------- */
+
+  function distBarColor(bucket, index, sameDirCount) {
+    if (bucket.dir === 'flat') return 'rgba(255, 255, 255, 0.2)';
+    const t = sameDirCount > 1 ? index / (sameDirCount - 1) : 0.5;
+    const alpha = (0.42 + t * 0.53).toFixed(2);
+    return bucket.dir === 'up'
+      ? `rgba(255, 88, 82, ${alpha})`
+      : `rgba(38, 205, 152, ${alpha})`;
+  }
+
+  function resetDistribution(message = '涨跌分布暂未更新') {
+    const chart = $('distChart');
+    if (chart) chart.replaceChildren();
+    const empty = $('distEmpty');
+    if (empty) {
+      empty.innerHTML = `<span class="chart-loader" aria-hidden="true"></span>${message}`;
+      empty.classList.remove('is-hidden');
+    }
+    setText('distMedian', '—');
+    setText('distMean', '—');
+    setText('distUp', '—');
+    setText('distDown', '—');
+  }
+
+  function renderDistribution(data) {
+    const dist = data?.distribution;
+    if (!dist || !Array.isArray(dist.buckets) || !dist.buckets.length) {
+      resetDistribution();
+      return;
+    }
+    const chart = $('distChart');
+    if (!chart) return;
+    const maxCount = Math.max(1, dist.maxCount || 1);
+
+    // 同一方向的柱子按「离零点越远颜色越深」着色
+    const upIndexes = new Map();
+    const downIndexes = new Map();
+    const upTotal = dist.buckets.filter((b) => b.dir === 'up').length;
+    const downTotal = dist.buckets.filter((b) => b.dir === 'down').length;
+    let upSeen = 0;
+    let downSeen = 0;
+    dist.buckets.forEach((bucket) => {
+      if (bucket.dir === 'up') upIndexes.set(bucket.label, upSeen++);
+      if (bucket.dir === 'down') downIndexes.set(bucket.label, downTotal - 1 - downSeen++);
+    });
+
+    const fragment = document.createDocumentFragment();
+    dist.buckets.forEach((bucket) => {
+      const col = document.createElement('div');
+      col.className = 'dist-col';
+      col.title = `${bucket.label}：${bucket.count} 只（${bucket.pct}%）`;
+
+      const count = document.createElement('span');
+      count.className = 'dist-count';
+      const countValue = document.createElement('b');
+      countValue.textContent = nf0.format(bucket.count);
+      const countPct = document.createElement('em');
+      countPct.textContent = `${bucket.pct}%`;
+      count.append(countValue, countPct);
+
+      const area = document.createElement('div');
+      area.className = 'dist-bar-area';
+      const bar = document.createElement('div');
+      bar.className = 'dist-bar';
+      bar.style.height = `${Math.max(1.5, (bucket.count / maxCount) * 100)}%`;
+      bar.style.background = distBarColor(
+        bucket,
+        bucket.dir === 'up' ? upIndexes.get(bucket.label) : downIndexes.get(bucket.label),
+        bucket.dir === 'up' ? upTotal : downTotal
+      );
+      area.appendChild(bar);
+
+      const label = document.createElement('span');
+      label.className = 'dist-label';
+      label.textContent = bucket.label;
+
+      col.append(count, area, label);
+      fragment.appendChild(col);
+    });
+    chart.replaceChildren(fragment);
+
+    setText('distMedian', dist.medianLabel || '—');
+    setText('distMean', fmtSignedPct(dist.meanPct, 2));
+    const meanEl = $('distMean');
+    if (meanEl) setTrend(meanEl, dist.meanPct);
+    setText('distUp', fmtInt(dist.upCount));
+    setText('distDown', fmtInt(dist.downCount));
+
+    const empty = $('distEmpty');
+    if (empty) empty.classList.add('is-hidden');
+  }
+
   function renderSectors(data) {
     const sectors = data?.sectors;
     if (!sectors || !Array.isArray(sectors.items) || !sectors.items.length) {
@@ -1602,6 +1695,7 @@
     renderDelta(data);
     renderLimits(data);
     renderStructure(data);
+    renderDistribution(data);
     renderSectors(data);
     charts.index?.update(data);
     charts.delta?.update(data);

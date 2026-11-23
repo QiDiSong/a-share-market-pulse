@@ -2099,6 +2099,159 @@ body[data-paused="true"] .btn-pause {
   color: var(--text-2);
 }
 
+/* ---------- 涨跌分布 ---------- */
+
+.dist-section {
+  margin-top: 16px;
+}
+
+.dist-card {
+  padding-bottom: 18px;
+}
+
+.dist-head {
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  align-items: flex-start;
+  margin-bottom: 6px;
+}
+
+.dist-summary {
+  display: flex;
+  gap: 18px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  padding-top: 2px;
+  font-size: 9px;
+  color: var(--faint);
+}
+
+.dist-summary span {
+  display: inline-flex;
+  gap: 6px;
+  align-items: baseline;
+  white-space: nowrap;
+}
+
+.dist-summary b {
+  font-family: var(--num);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.dist-summary-up b {
+  color: var(--red);
+}
+
+.dist-summary-down b {
+  color: var(--green);
+}
+
+.dist-chart-wrap {
+  position: relative;
+  margin-top: 10px;
+}
+
+.dist-chart {
+  display: flex;
+  gap: clamp(4px, 0.65vw, 12px);
+  align-items: stretch;
+  height: 218px;
+  padding: 0 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.dist-col {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  min-width: 38px;
+  height: 100%;
+}
+
+.dist-count {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 1px;
+  align-items: center;
+  margin-bottom: 5px;
+  font-family: var(--num);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.dist-count b {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.dist-count em {
+  font-size: 8px;
+  font-style: normal;
+  color: var(--faint);
+}
+
+.dist-bar-area {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-end;
+  width: 100%;
+  min-height: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dist-bar {
+  width: 100%;
+  min-height: 2px;
+  border-radius: 3px 3px 0 0;
+  transition: height 0.5s cubic-bezier(0.22, 0.68, 0.24, 1);
+}
+
+.dist-col:hover .dist-bar {
+  filter: brightness(1.25);
+}
+
+.dist-label {
+  flex: 0 0 auto;
+  margin-top: 6px;
+  font-family: var(--num);
+  font-size: 8px;
+  line-height: 1;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+.dist-empty {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+  background: rgba(9, 13, 20, 0.82);
+  border-radius: 8px;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.dist-empty.is-hidden {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dist-hint {
+  display: none;
+}
+
 /* ---------- Sector heatmap ---------- */
 
 .sector-section {
@@ -3512,5 +3665,49 @@ body[data-paused="true"] .btn-pause {
 @media (prefers-reduced-motion: no-preference) {
   .sector-section .card {
     animation: rise 0.65s cubic-bezier(0.2, 0.7, 0.25, 1) 0.11s both;
+  }
+}
+
+/* 涨跌分布 · 窄屏：单行可横向滑动，给出手势提示 */
+@media (max-width: 620px) {
+  .dist-summary {
+    gap: 10px 14px;
+    font-size: 8px;
+  }
+
+  .dist-summary b {
+    font-size: 11px;
+  }
+
+  .dist-chart {
+    gap: 5px;
+    height: 196px;
+    padding-bottom: 2px;
+    scroll-snap-type: x proximity;
+  }
+
+  .dist-col {
+    min-width: 36px;
+    scroll-snap-align: start;
+  }
+
+  .dist-count b {
+    font-size: 9px;
+  }
+
+  .dist-count em {
+    font-size: 7px;
+  }
+
+  .dist-label {
+    font-size: 7px;
+  }
+
+  .dist-hint {
+    display: block;
+    margin-top: 7px;
+    font-size: 8px;
+    color: var(--faint);
+    text-align: center;
   }
 }

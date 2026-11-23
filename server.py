@@ -628,6 +628,7 @@ def partial_payload(
     sectors: dict[str, Any] | None,
     sector_error: str | None,
     trends_error: str,
+    distribution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """分时接口不可用时，至少把快照类数据提供给页面。"""
     sh_quote = quotes["000001"]
@@ -711,6 +712,7 @@ def partial_payload(
         "breadth": breadth,
         "limits": pools,
         "sectors": sectors,
+        "distribution": distribution,
         "turnover": {
             "current": current_total,
             "currentSh": sh_amount,
@@ -739,6 +741,117 @@ def partial_payload(
         "warnings": warnings,
         "errorDetail": trends_error,
     }
+
+
+def dist_url() -> str:
+    return (
+        "https://push2ex.eastmoney.com/getTopicZDFenBu"
+        f"?ut={POOL_UT}&dpt=wz.ztzt&_={int(time.time() * 1000)}"
+    )
+
+
+# 把接口的 1% 明细合并成可读区间：(起始key, 结束key, 标签, 方向)
+DIST_BUCKETS = [
+    (-11, -11, "≤−10%", "down"),
+    (-10, -8, "−10~−7%", "down"),
+    (-7, -6, "−7~−5%", "down"),
+    (-5, -4, "−5~−3%", "down"),
+    (-3, -3, "−3~−2%", "down"),
+    (-2, -2, "−2~−1%", "down"),
+    (-1, -1, "−1~0%", "down"),
+    (0, 0, "平盘", "flat"),
+    (1, 1, "0~1%", "up"),
+    (2, 2, "1~2%", "up"),
+    (3, 3, "2~3%", "up"),
+    (4, 5, "3~5%", "up"),
+    (6, 7, "5~7%", "up"),
+    (8, 10, "7~10%", "up"),
+    (11, 11, "≥10%", "up"),
+]
+
+
+def parse_distribution(payload: dict[str, Any]) -> dict[str, Any]:
+    data = payload.get("data")
+    if not isinstance(data, dict) or not data.get("fenbu"):
+        raise ValueError("涨跌分布为空")
+    counts: dict[int, int] = {}
+    for entry in data["fenbu"]:
+        if not isinstance(entry, dict):
+            continue
+        for key, value in entry.items():
+            try:
+                counts[int(key)] = int(value)
+            except (TypeError, ValueError):
+                continue
+    total = sum(counts.values())
+    if total <= 0:
+        raise ValueError("涨跌分布无数据")
+
+    buckets = []
+    for start, end, label, direction in DIST_BUCKETS:
+        count = sum(counts.get(k, 0) for k in range(start, end + 1))
+        buckets.append(
+            {
+                "label": label,
+                "count": count,
+                "pct": round(count / total * 100, 1),
+                "dir": direction,
+            }
+        )
+
+    # 均值按每个 1% 区间的中点加权；两端开口区间取 ±10.5 近似。
+    weighted = 0.0
+    for key, count in counts.items():
+        mid = 10.5 if key >= 11 else (-10.5 if key <= -11 else key - 0.5)
+        weighted += mid * count
+    mean_pct = weighted / total
+
+    # 中位数：累计家数首次越过一半时所在的 1% 区间
+    running = 0
+    median_label = "—"
+    for key in sorted(counts):
+        running += counts[key]
+        if running >= total / 2:
+            median_label = "平盘" if key == 0 else (
+                f"≥10%" if key >= 11 else ("≤−10%" if key <= -11 else f"{key - 1}%~{key}%")
+            )
+            break
+
+    up_count = sum(c for k, c in counts.items() if k > 0)
+    down_count = sum(c for k, c in counts.items() if k < 0)
+    return {
+        "date": str(data.get("qdate") or ""),
+        "total": total,
+        "buckets": buckets,
+        "maxCount": max((b["count"] for b in buckets), default=0),
+        "upCount": up_count,
+        "downCount": down_count,
+        "flatCount": counts.get(0, 0),
+        "medianLabel": median_label,
+        "meanPct": round(mean_pct, 2),
+    }
+
+
+DIST_CACHE_SECONDS = 20.0
+_dist_cache: dict[str, Any] = {"at": 0.0, "data": None}
+_dist_lock = threading.Lock()
+
+
+def load_distribution() -> dict[str, Any]:
+    with _dist_lock:
+        cached = _dist_cache.get("data")
+        if cached is not None and time.time() - float(_dist_cache.get("at") or 0.0) < DIST_CACHE_SECONDS:
+            return cached
+    try:
+        data = parse_distribution(fetch_json(dist_url(), 6.0, 2))
+    except Exception:
+        if cached is not None:
+            return cached
+        raise
+    with _dist_lock:
+        _dist_cache["data"] = data
+        _dist_cache["at"] = time.time()
+    return data
 
 
 def fallback_quotes() -> dict[str, dict[str, Any]]:
@@ -841,18 +954,25 @@ def build_dashboard() -> dict[str, Any]:
             sector_error = sector_error or str(exc)
 
     trends_error = ""
+    distribution: dict[str, Any] | None = None
+    dist_error = ""
     try:
-        with ThreadPoolExecutor(max_workers=2) as pool:
+        with ThreadPoolExecutor(max_workers=3) as pool:
             sh_future = pool.submit(load_trends, INDICES[0]["secid"])
             sz_future = pool.submit(load_trends, INDICES[1]["secid"])
+            dist_future = pool.submit(load_distribution)
             sh = sh_future.result()
             sz = sz_future.result()
+            try:
+                distribution = dist_future.result()
+            except Exception as exc:
+                dist_error = str(exc)
     except Exception as exc:
         trends_error = str(exc)
         sh = sz = None
 
     if not sh or not sz:
-        return partial_payload(fetched_at, quotes, sectors, sector_error, trends_error)
+        return partial_payload(fetched_at, quotes, sectors, sector_error, trends_error, distribution)
 
     all_dates = sorted(set(sh["dates"]) | set(sz["dates"]))
     if not all_dates:
@@ -981,6 +1101,26 @@ def build_dashboard() -> dict[str, Any]:
     session = market_session(latest_day, fetched_at)
 
     warnings: list[str] = []
+    if dist_error:
+        warnings.append("涨跌分布暂未更新")
+    # 涨跌分布是逐只统计的精确口径，优先用它作为涨跌家数
+    if distribution and distribution.get("total"):
+        up_n = int(distribution.get("upCount") or 0)
+        down_n = int(distribution.get("downCount") or 0)
+        flat_n = int(distribution.get("flatCount") or 0)
+        total_n = up_n + down_n + flat_n
+        if total_n:
+            breadth = {
+                "up": up_n,
+                "down": down_n,
+                "flat": flat_n,
+                "total": total_n,
+                "upPct": round(up_n / total_n * 100, 1),
+                "downPct": round(down_n / total_n * 100, 1),
+                "flatPct": round(flat_n / total_n * 100, 1),
+                "ratio": round(up_n / down_n, 2) if down_n else None,
+                "estimated": False,
+            }
     if breadth.get("up") is None and sectors and sectors.get("items"):
         up_sum = sum(int(item.get("up") or 0) for item in sectors["items"])
         down_sum = sum(int(item.get("down") or 0) for item in sectors["items"])
@@ -1065,6 +1205,7 @@ def build_dashboard() -> dict[str, Any]:
         "breadth": breadth,
         "limits": pools,
         "sectors": sectors,
+        "distribution": distribution,
         "turnover": {
             "current": current_total,
             "currentSh": sh_amount,
